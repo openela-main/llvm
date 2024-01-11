@@ -13,12 +13,14 @@
 %bcond_with compat_build
 %bcond_without check
 
-#global rc_ver 3
-%global maj_ver 15
+#global rc_ver 4
+%global maj_ver 16
 %global min_ver 0
-%global patch_ver 7
+%global patch_ver 6
 %global llvm_srcdir llvm-%{maj_ver}.%{min_ver}.%{patch_ver}%{?rc_ver:rc%{rc_ver}}.src
 %global cmake_srcdir cmake-%{maj_ver}.%{min_ver}.%{patch_ver}%{?rc_ver:rc%{rc_ver}}.src
+%global third_party_srcdir third-party-%{maj_ver}.%{min_ver}.%{patch_ver}%{?rc_ver:rc%{rc_ver}}.src
+%global _lto_cflags -flto=thin
 
 %if %{with compat_build}
 %global pkg_name llvm%{maj_ver}
@@ -38,6 +40,14 @@
 %global pkg_bindir %{_bindir}
 %global pkg_libdir %{install_libdir}
 %global exec_suffix %{nil}
+%endif
+
+%if 0%{?rhel}
+%global targets_to_build "X86;AMDGPU;PowerPC;NVPTX;SystemZ;AArch64;ARM;Mips;BPF;WebAssembly"
+%global experimental_targets_to_build ""
+%else
+%global targets_to_build "all"
+%global experimental_targets_to_build "AVR"
 %endif
 
 %global build_install_prefix %{buildroot}%{install_prefix}
@@ -91,26 +101,35 @@
 
 Name:		%{pkg_name}
 Version:	%{maj_ver}.%{min_ver}.%{patch_ver}%{?rc_ver:~rc%{rc_ver}}
-Release:	1%{?dist}
+Release:	3%{?dist}
 Summary:	The Low Level Virtual Machine
 
-License:	NCSA
+License:	Apache-2.0 WITH LLVM-exception OR NCSA
 URL:		http://llvm.org
 Source0:	https://github.com/llvm/llvm-project/releases/download/llvmorg-%{maj_ver}.%{min_ver}.%{patch_ver}%{?rc_ver:-rc%{rc_ver}}/%{llvm_srcdir}.tar.xz
 Source1:	https://github.com/llvm/llvm-project/releases/download/llvmorg-%{maj_ver}.%{min_ver}.%{patch_ver}%{?rc_ver:-rc%{rc_ver}}/%{llvm_srcdir}.tar.xz.sig
 Source2:	https://github.com/llvm/llvm-project/releases/download/llvmorg-%{maj_ver}.%{min_ver}.%{patch_ver}%{?rc_ver:-rc%{rc_ver}}/%{cmake_srcdir}.tar.xz
 Source3:	https://github.com/llvm/llvm-project/releases/download/llvmorg-%{maj_ver}.%{min_ver}.%{patch_ver}%{?rc_ver:-rc%{rc_ver}}/%{cmake_srcdir}.tar.xz.sig
-Source4:	release-keys.asc
+Source4:	https://github.com/llvm/llvm-project/releases/download/llvmorg-%{maj_ver}.%{min_ver}.%{patch_ver}%{?rc_ver:-rc%{rc_ver}}/%{third_party_srcdir}.tar.xz
+Source5:	https://github.com/llvm/llvm-project/releases/download/llvmorg-%{maj_ver}.%{min_ver}.%{patch_ver}%{?rc_ver:-rc%{rc_ver}}/%{third_party_srcdir}.tar.xz.sig
+Source6:	release-keys.asc
 
 %if %{without compat_build}
-Source5:	run-lit-tests
-Source6:	lit.fedora.cfg.py
+Source7:	run-lit-tests
+Source8:	lit.fedora.cfg.py
 %endif
-
-Patch2:		0001-XFAIL-missing-abstract-variable.ll-test-on-ppc64le.patch
 
 # RHEL-specific patches.
 Patch101:      0001-Deactivate-markdown-doc.patch
+# Backported from LLVM 17
+Patch1:		0001-SystemZ-Improve-error-messages-for-unsupported-reloc.patch
+# See https://reviews.llvm.org/D137890 for the next two patches
+Patch2:		0001-llvm-Add-install-targets-for-gtest.patch
+# Backport of https://reviews.llvm.org/D156379 from LLVM 18.
+Patch3:		D156379.diff
+
+# Patching third-party dir with a 200 offset in patch number
+Patch201:	0201-third-party-Add-install-targets-for-gtest.patch
 
 BuildRequires:	gcc
 BuildRequires:	gcc-c++
@@ -249,14 +268,21 @@ This is the main package for llvm-toolset.
 %endif
 
 %prep
-%{gpgverify} --keyring='%{SOURCE4}' --signature='%{SOURCE1}' --data='%{SOURCE0}'
-%{gpgverify} --keyring='%{SOURCE4}' --signature='%{SOURCE3}' --data='%{SOURCE2}'
+%{gpgverify} --keyring='%{SOURCE6}' --signature='%{SOURCE1}' --data='%{SOURCE0}'
+%{gpgverify} --keyring='%{SOURCE6}' --signature='%{SOURCE3}' --data='%{SOURCE2}'
+%{gpgverify} --keyring='%{SOURCE6}' --signature='%{SOURCE5}' --data='%{SOURCE4}'
 %setup -T -q -b 2 -n %{cmake_srcdir}
 # TODO: It would be more elegant to set -DLLVM_COMMON_CMAKE_UTILS=%{_builddir}/%{cmake_srcdir},
 # but this is not a CACHED variable, so we can't actually set it externally :(
 cd ..
 mv %{cmake_srcdir} cmake
-%autosetup -n %{llvm_srcdir} -p2
+%setup -T -q -b 4 -n %{third_party_srcdir}
+%autopatch -m200 -p2
+cd ..
+mv %{third_party_srcdir} third-party
+
+%setup -T -q -b 0 -n %{llvm_srcdir}
+%autopatch -M200 -p2
 
 %py3_shebang_fix \
 	test/BugPoint/compile-custom.ll.py \
@@ -282,6 +308,9 @@ find -name '*.md' | while read md; do sed -r -e 's/^( )*\* /\n\1\* /' ${md} | pa
 # Decrease debuginfo verbosity to reduce memory consumption during final library linking
 %global optflags %(echo %{optflags} | sed 's/-g /-g1 /')
 %endif
+
+# Copy CFLAGS into ASMFLAGS, so -fcf-protection is used when compiling assembly files.
+export ASMFLAGS=$CFLAGS
 
 # force off shared libs as cmake macros turns it on.
 %cmake	-G Ninja \
@@ -319,6 +348,7 @@ find -name '*.md' | while read md; do sed -r -e 's/^( )*\* /\n\1\* /' ${md} | pa
 	\
 	-DLLVM_INCLUDE_TESTS:BOOL=ON \
 	-DLLVM_BUILD_TESTS:BOOL=ON \
+	-DLLVM_INSTALL_GTEST:BOOL=ON \
 	-DLLVM_LIT_ARGS=-v \
 	\
 	-DLLVM_INCLUDE_EXAMPLES:BOOL=ON \
@@ -341,11 +371,11 @@ find -name '*.md' | while read md; do sed -r -e 's/^( )*\* /\n\1\* /' ${md} | pa
 %if %{without compat_build}
 	-DLLVM_VERSION_SUFFIX='' \
 %endif
+	-DLLVM_UNREACHABLE_OPTIMIZE:BOOL=OFF \
 	-DLLVM_BUILD_LLVM_DYLIB:BOOL=ON \
 	-DLLVM_LINK_LLVM_DYLIB:BOOL=ON \
 	-DLLVM_BUILD_EXTERNAL_COMPILER_RT:BOOL=ON \
 	-DLLVM_INSTALL_TOOLCHAIN_ONLY:BOOL=OFF \
-	\
 	-DLLVM_DEFAULT_TARGET_TRIPLE=%{llvm_triple} \
 	-DSPHINX_WARNINGS_AS_ERRORS=OFF \
 	-DCMAKE_INSTALL_PREFIX=%{install_prefix} \
@@ -390,13 +420,14 @@ rm -rf test/tools/UpdateTestChecks
 %endif
 
 install %{build_libdir}/libLLVMTestingSupport.a %{buildroot}%{_libdir}
+install %{build_libdir}/libLLVMTestingAnnotations.a %{buildroot}%{_libdir}
 
 %global install_srcdir %{buildroot}%{_datadir}/llvm/src
 
 # Install gtest sources so clang can use them for gtest
 install -d %{install_srcdir}
 install -d %{install_srcdir}/utils/
-cp -R utils/unittest %{install_srcdir}/utils/
+cp -R ../third-party/unittest %{install_srcdir}/utils/
 
 # Clang needs these for running lit tests.
 cp utils/update_cc_test_checks.py %{install_srcdir}/utils/
@@ -469,7 +500,7 @@ rm %{buildroot}%{_bindir}/llvm-config%{exec_suffix}
 touch %{buildroot}%{_bindir}/llvm-config%{exec_suffix}
 
 %if %{without compat_build}
-cp -Rv ../cmake/Modules/* %{buildroot}%{_libdir}/cmake/llvm
+cp -Rv ../cmake/Modules/* %{buildroot}%{pkg_libdir}/cmake/llvm
 %endif
 
 
@@ -586,6 +617,7 @@ fi
 %if %{without compat_build}
 %{_libdir}/*.a
 %exclude %{_libdir}/libLLVMTestingSupport.a
+%exclude %{_libdir}/libLLVMTestingAnnotations.a
 %else
 %{_libdir}/%{name}/lib/*.a
 %endif
@@ -605,6 +637,9 @@ fi
 %license LICENSE.TXT
 %{_datadir}/llvm/src/utils
 %{_libdir}/libLLVMTestingSupport.a
+%{_libdir}/libLLVMTestingAnnotations.a
+%{_includedir}/llvm-gtest
+%{_includedir}/llvm-gmock
 
 %if 0%{?rhel}
 %files toolset
@@ -614,6 +649,19 @@ fi
 %endif
 
 %changelog
+* Thu Aug 03 2023 Tulio Magno Quites Machado Filho <tuliom@redhat.com> - 16.0.6-3
+- Fix rhbz #2228944
+
+* Wed Jul 19 2023 Tulio Magno Quites Machado Filho <tuliom@redhat.com> - 16.0.6-2
+- Improve error messages for unsupported relocs on s390x (rhbz#2216906)
+- Disable LLVM_UNREACHABLE_OPTIMIZE
+
+* Sat Jun 17 2023 Tom Stellard <tstellar@redhat.com> - 16.0.6-1
+- 16.0.6 Release
+
+* Wed Apr 05 2023 Timm Bäder <tbaeder@redhat.com> - 16.0.0-1
+- 16.0.0 Release
+
 * Thu Jan 19 2023 Tom Stellard <tstellar@redhat.com> - 15.0.7-1
 - 15.0.7 Release
 

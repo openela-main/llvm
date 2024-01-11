@@ -1,4 +1,6 @@
-SOURCES/cmake-15.0.7.src.tar.xz
-SOURCES/cmake-15.0.7.src.tar.xz.sig
-SOURCES/llvm-15.0.7.src.tar.xz
-SOURCES/llvm-15.0.7.src.tar.xz.sig
+SOURCES/cmake-16.0.6.src.tar.xz
+SOURCES/cmake-16.0.6.src.tar.xz.sig
+SOURCES/llvm-16.0.6.src.tar.xz
+SOURCES/llvm-16.0.6.src.tar.xz.sig
+SOURCES/third-party-16.0.6.src.tar.xz
+SOURCES/third-party-16.0.6.src.tar.xz.sig
