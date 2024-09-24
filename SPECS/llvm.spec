@@ -118,7 +118,7 @@
 
 Name:		%{pkg_name}
 Version:	%{maj_ver}.%{min_ver}.%{patch_ver}%{?rc_ver:~rc%{rc_ver}}%{?llvm_snapshot_version_suffix:~%{llvm_snapshot_version_suffix}}
-Release:	2%{?dist}
+Release:	3%{?dist}
 Summary:	The Low Level Virtual Machine
 
 License:	Apache-2.0 WITH LLVM-exception OR NCSA
@@ -140,6 +140,7 @@ Source6:	release-keys.asc
 
 # Backport of https://reviews.llvm.org/D156485 for RHEL-23865.
 Patch0: 0001-PEI-Don-t-zero-out-noreg-operands.patch
+Patch1: 0001-DAG-Fix-crash-in-replaceStoreOfInsertLoad.patch
 
 # RHEL-specific patch to avoid unwanted recommonmark dep
 Patch101:	0101-Deactivate-markdown-doc.patch
@@ -655,6 +656,9 @@ fi
 %endif
 
 %changelog
+* Wed Jul 17 2024 Tom Stellard <tstellar@redhat.com> - 17.0.6-3
+- Backport fix for RHEL-49522
+
 * Fri Feb 02 2024 Nikita Popov <npopov@redhat.com> - 17.0.6-2
 - Fix crash with -fzero-call-used-regs (RHEL-23865)
 
