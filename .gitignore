@@ -1,6 +1,6 @@
-SOURCES/third-party-17.0.6.src.tar.xz
-SOURCES/third-party-17.0.6.src.tar.xz.sig
-SOURCES/cmake-17.0.6.src.tar.xz
-SOURCES/cmake-17.0.6.src.tar.xz.sig
-SOURCES/llvm-17.0.6.src.tar.xz
-SOURCES/llvm-17.0.6.src.tar.xz.sig
+SOURCES/llvm-18.1.8.src.tar.xz.sig
+SOURCES/third-party-18.1.8.src.tar.xz
+SOURCES/third-party-18.1.8.src.tar.xz.sig
+SOURCES/cmake-18.1.8.src.tar.xz
+SOURCES/cmake-18.1.8.src.tar.xz.sig
+SOURCES/llvm-18.1.8.src.tar.xz
