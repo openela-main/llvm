@@ -1,6 +1,2 @@
-SOURCES/llvm-18.1.8.src.tar.xz.sig
-SOURCES/third-party-18.1.8.src.tar.xz
-SOURCES/third-party-18.1.8.src.tar.xz.sig
-SOURCES/cmake-18.1.8.src.tar.xz
-SOURCES/cmake-18.1.8.src.tar.xz.sig
-SOURCES/llvm-18.1.8.src.tar.xz
+SOURCES/llvm-project-19.1.7.src.tar.xz
+SOURCES/llvm-project-19.1.7.src.tar.xz.sig
