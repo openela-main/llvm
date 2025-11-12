@@ -1,0 +1,56 @@
+From 1e49835cc5737b2dffff5923e09546b70a54f90d Mon Sep 17 00:00:00 2001
+From: Tom Stellard <tstellar@redhat.com>
+Date: Tue, 29 Apr 2025 21:35:57 +0000
+Subject: [PATCH] [sanitizer_common] Disable termio ioctls on PowerPC
+
+glibc-2.42 removed the termio.h header, but there are refrences to it
+still in the kernel's ioctl.h, so we need disable these ioctls to fix
+this build.
+---
+ .../sanitizer_platform_limits_posix.cpp       | 19 ++++++++++++++++---
+ 1 file changed, 16 insertions(+), 3 deletions(-)
+
+diff --git a/compiler-rt/lib/sanitizer_common/sanitizer_platform_limits_posix.cpp b/compiler-rt/lib/sanitizer_common/sanitizer_platform_limits_posix.cpp
+index 10b6535499de..303c82783528 100644
+--- a/compiler-rt/lib/sanitizer_common/sanitizer_platform_limits_posix.cpp
++++ b/compiler-rt/lib/sanitizer_common/sanitizer_platform_limits_posix.cpp
+@@ -173,6 +173,17 @@ typedef struct user_fpregs elf_fpregset_t;
+ #include <sys/sockio.h>
+ #endif
+ 
++#if SANITIZER_HAIKU
++#include <sys/sockio.h>
++#include <sys/ioctl.h>
++#endif
++
++// Work around struct termio usage in ioctl.h on ppc64le.
++#if SANITIZER_GLIBC && !__has_include(<termio.h>) &&  defined(__powerpc64__)
++  #define DISABLE_TERMIO_IOCTLS 1
++#endif
++
++
+ // Include these after system headers to avoid name clashes and ambiguities.
+ #  include "sanitizer_common.h"
+ #  include "sanitizer_internal_defs.h"
+@@ -764,13 +775,15 @@ unsigned struct_ElfW_Phdr_sz = sizeof(Elf_Phdr);
+   unsigned IOCTL_SOUND_PCM_WRITE_FILTER = SOUND_PCM_WRITE_FILTER;
+ #endif // SOUND_VERSION
+   unsigned IOCTL_TCFLSH = TCFLSH;
++#if !defined(DISABLE_TERMIO_IOCTLS)
+   unsigned IOCTL_TCGETA = TCGETA;
+-  unsigned IOCTL_TCGETS = TCGETS;
+-  unsigned IOCTL_TCSBRK = TCSBRK;
+-  unsigned IOCTL_TCSBRKP = TCSBRKP;
+   unsigned IOCTL_TCSETA = TCSETA;
+   unsigned IOCTL_TCSETAF = TCSETAF;
+   unsigned IOCTL_TCSETAW = TCSETAW;
++#endif
++  unsigned IOCTL_TCGETS = TCGETS;
++  unsigned IOCTL_TCSBRK = TCSBRK;
++  unsigned IOCTL_TCSBRKP = TCSBRKP;
+   unsigned IOCTL_TCSETS = TCSETS;
+   unsigned IOCTL_TCSETSF = TCSETSF;
+   unsigned IOCTL_TCSETSW = TCSETSW;
+-- 
+2.48.1
+
