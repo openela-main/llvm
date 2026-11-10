@@ -1,0 +1,70 @@
+From 0b6a1ef4297bb839fe26041602d32411358e0032 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Miro=20Hron=C4=8Dok?= <miro@hroncok.cz>
+Date: Tue, 26 May 2026 01:41:01 +0200
+Subject: [PATCH] [lit] Normalize RLIM_INFINITY to "infinity" in
+ print_limits.py for Python 3.15+ (#190953)
+
+Python 3.15 changed resource.getrlimit() to return the platform's
+maximum value (e.g., 18446744073709551615 on 64-bit systems) instead of
+-1 for RLIM_INFINITY. This breaks lit tests that expect -1 for unlimited
+resource limits.
+
+This patch normalizes the return value to "infinity" when it equals
+RLIM_INFINITY to maintain compatibility with existing tests across all
+Python versions.
+
+Fixes test failure: shtest-ulimit-nondarwin.py
+Expected: RLIMIT_FSIZE=-1
+Got: RLIMIT_FSIZE=18446744073709551615
+
+Reference:
+https://github.com/python/cpython/commit/0324c726dea702282a0300225e989b19ae23b759
+Reference: https://bugzilla.redhat.com/show_bug.cgi?id=2448969
+
+Analysis and testing assisted by AI.
+
+Assisted-by: Claude Sonnet 4.5
+
+---------
+
+Co-authored-by: Alexander Richardson <mail@alexrichardson.me>
+Co-authored-by: Tulio Magno Quites Machado Filho <tuliom@quites.com.br>
+---
+ .../tests/Inputs/shtest-ulimit/print_limits.py  | 17 +++++++++++++----
+ llvm/utils/lit/tests/shtest-ulimit-nondarwin.py |  2 +-
+ 2 files changed, 14 insertions(+), 5 deletions(-)
+
+diff --git a/llvm/utils/lit/tests/Inputs/shtest-ulimit/print_limits.py b/llvm/utils/lit/tests/Inputs/shtest-ulimit/print_limits.py
+index c732c0429e661..6c03721baf36d 100644
+--- a/llvm/utils/lit/tests/Inputs/shtest-ulimit/print_limits.py
++++ b/llvm/utils/lit/tests/Inputs/shtest-ulimit/print_limits.py
+@@ -1,6 +1,15 @@
+ import resource
+ 
+-print("RLIMIT_AS=" + str(resource.getrlimit(resource.RLIMIT_AS)[0]))
+-print("RLIMIT_NOFILE=" + str(resource.getrlimit(resource.RLIMIT_NOFILE)[0]))
+-print("RLIMIT_STACK=" + str(resource.getrlimit(resource.RLIMIT_STACK)[0]))
+-print("RLIMIT_FSIZE=" + str(resource.getrlimit(resource.RLIMIT_FSIZE)[0]))
++
++def normalize_limit(limit_value):
++    """Normalize RLIM_INFINITY to "infinity" for consistency across Python versions.
++
++    Python 3.15+ returns the platform's max value (e.g., 2^64-1) instead of -1.
++    """
++    return "infinity" if limit_value == resource.RLIM_INFINITY else str(limit_value)
++
++
++print("RLIMIT_AS=" + normalize_limit(resource.getrlimit(resource.RLIMIT_AS)[0]))
++print("RLIMIT_NOFILE=" + normalize_limit(resource.getrlimit(resource.RLIMIT_NOFILE)[0]))
++print("RLIMIT_STACK=" + normalize_limit(resource.getrlimit(resource.RLIMIT_STACK)[0]))
++print("RLIMIT_FSIZE=" + normalize_limit(resource.getrlimit(resource.RLIMIT_FSIZE)[0]))
+diff --git a/llvm/utils/lit/tests/shtest-ulimit-nondarwin.py b/llvm/utils/lit/tests/shtest-ulimit-nondarwin.py
+index 43811db750f80..80844d1d79460 100644
+--- a/llvm/utils/lit/tests/shtest-ulimit-nondarwin.py
++++ b/llvm/utils/lit/tests/shtest-ulimit-nondarwin.py
+@@ -18,4 +18,4 @@
+ # CHECK: ulimit -f 5
+ # CHECK: RLIMIT_FSIZE=5
+ # CHECK: ulimit -f unlimited
+-# CHECK: RLIMIT_FSIZE=-1
++# CHECK: RLIMIT_FSIZE=infinity
